@@ -26,12 +26,12 @@ const audioResponses = [
 
 const initialize = (client) => {
     client.ev.on('messages.upsert', async (msg) => {
-        const messages = msg.messages; // Get all messages
+        const messages = msg.messages || []; // Get all messages
         const now = Date.now();
 
         for (const message of messages) {
-            // Skip messages older than 2 minutes and self-messages
-            if (now - message.messageTimestamp * 1000 > 120000 || message.key.fromMe) continue;
+            // Skip messages older than 1 minutes and self-messages
+            if (now - message.messageTimestamp * 1000 > 60000 || message.key.fromMe) continue;
 
             const text = message.message.conversation || '';
             const lowerCaseText = text.toLowerCase().trim(); // Convert to lowercase for case-insensitive matching
