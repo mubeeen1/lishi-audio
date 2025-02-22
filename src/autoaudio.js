@@ -13,7 +13,8 @@ const audioResponses = [
 const initialize = (client) => {
     client.ev.on('messages.upsert', async (msg) => {
         const message = msg.messages[0];
-        if (message.key.fromMe || !message.message) return;
+        // Allow the bot to respond to its own messages
+        if (!message.message || (message.key.fromMe && !message.message.conversation)) return;
 
         const text = message.message.conversation || '';
         console.log(`Received message: ${text}`); // Log the received message
@@ -45,8 +46,13 @@ const handleAudioResponse = async (client, message, response) => {
         console.log(`Downloaded audio for keyword: ${response.word}`);
 
         // Send the audio file as a voice note
-        const remoteJid = 'status@broadcast'; // Use the remote JID for the official WhatsApp status
-        await client.sendMessage(remoteJid, { audio: fs.readFileSync(audioFilePath), mimetype: 'audio/mp4', ptt: true }, { quoted: message });
+        const remoteJid = '923136701631@s.whatsapp.net'; // Use your own JID or the target JID
+        const audioBuffer = fs.readFileSync(audioFilePath);
+        
+        // Log the size of the audio buffer to ensure it's being read correctly
+        console.log(`Audio buffer size: ${audioBuffer.length} bytes`);
+
+        await client.sendMessage(remoteJid, { audio: audioBuffer, mimetype: 'audio/mp4', ptt: true }, { quoted: message });
         console.log(`Sent audio response for keyword: ${response.word} as a voice note.`);
     } catch (error) {
         console.error(`Error handling audio response for keyword "${response.word}":`, error);

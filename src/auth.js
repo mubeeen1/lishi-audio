@@ -7,7 +7,7 @@ dotenv.config();
 
 const SESSION_PATH = './sessions';
 
-const initializeClient = async (sessionId) => {
+const initializeClient = async () => {
     // Ensure the sessions directory exists
     await fs.ensureDir(SESSION_PATH);
 
@@ -17,6 +17,7 @@ const initializeClient = async (sessionId) => {
     const client = makeWASocket({
         auth: state,
         printQRInTerminal: false, // Disable built-in QR printing
+        connectTimeoutMs: 60000, // Increase timeout to 60 seconds
     });
 
     client.ev.on('connection.update', async (update) => {
@@ -25,13 +26,12 @@ const initializeClient = async (sessionId) => {
         if (connection === 'close') {
             console.log('Connection closed. Reconnecting...');
             if (lastDisconnect && lastDisconnect.error) {
-                // Check if lastDisconnect.error.output is defined
+                console.error('Last disconnect error:', lastDisconnect.error);
                 if (lastDisconnect.error.output && lastDisconnect.error.output.statusCode !== 401) {
-                    await initializeClient(sessionId);
+                    await initializeClient();
                 }
             } else {
-                // If lastDisconnect is undefined, just reconnect
-                await initializeClient(sessionId);
+                await initializeClient();
             }
         } else if (connection === 'open') {
             console.log('Connected to WhatsApp!');
