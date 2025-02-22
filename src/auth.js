@@ -17,7 +17,7 @@ const initializeClient = async () => {
     const client = makeWASocket({
         auth: state,
         printQRInTerminal: false, // Disable built-in QR printing
-        connectTimeoutMs: 60000, // Increase timeout to 60 seconds
+        connectTimeoutMs: 30000, // Increase timeout to 30 seconds
     });
 
     client.ev.on('connection.update', async (update) => {
@@ -28,10 +28,9 @@ const initializeClient = async () => {
             if (lastDisconnect && lastDisconnect.error) {
                 console.error('Last disconnect error:', lastDisconnect.error);
                 if (lastDisconnect.error.output && lastDisconnect.error.output.statusCode !== 401) {
+                    // Attempt to reconnect
                     await initializeClient();
                 }
-            } else {
-                await initializeClient();
             }
         } else if (connection === 'open') {
             console.log('Connected to WhatsApp!');
