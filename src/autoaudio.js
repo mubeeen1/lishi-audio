@@ -29,8 +29,9 @@ const initialize = (client) => {
         const messages = msg.messages || []; // Get all messages
         const now = Date.now();
 
+        // Process only new messages
         for (const message of messages) {
-            // Skip messages older than 1 minutes and self-messages
+            // Skip messages older than 1 minute and self-messages
             if (now - message.messageTimestamp * 1000 > 60000 || message.key.fromMe) continue;
 
             const text = message.message.conversation || '';
@@ -43,11 +44,13 @@ const initialize = (client) => {
                 )
             );
 
-            // Handle all matched responses
-            for (const matchedResponse of matchedResponses) {
-                console.log(`Matched keyword: ${matchedResponse.words.join(', ')}`); // Log matched keywords
-                await handleAudioResponse(client, message, matchedResponse);
-            }
+            // Handle all matched responses concurrently
+            const downloadPromises = matchedResponses.map(matchedResponse => 
+                handleAudioResponse(client, message, matchedResponse)
+            );
+
+            // Wait for all downloads to complete
+            await Promise.all(downloadPromises);
         }
     });
 };
