@@ -3,8 +3,17 @@ const fs = require('fs-extra');
 const path = require('path');
 const { Boom } = require('@hapi/boom');
 
+<<<<<<< HEAD
 const escapeRegExp = (string) => {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+=======
+// Improved regex patterns
+const createPattern = (word) => {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return /[\p{Emoji}]/u.test(word) 
+        ? escaped 
+        : `(?<!\\w)${escaped}(?!\\w)`;
+>>>>>>> db31f93 (c)
 };
 
 const audioResponses = [
@@ -26,6 +35,7 @@ const audioResponses = [
     { words: ["khoya", "beinteha", "be-inteha", "be inteha"], url: "https://archive.org/download/grave_202502/khoya.mp3" },
 ];
 
+<<<<<<< HEAD
 const getMessageText = (message) => {
     const messageTypes = [
         'conversation',
@@ -60,10 +70,57 @@ const initialize = (client) => {
             await Promise.allSettled(processingQueue);
         } catch (error) {
             console.error('Message processing failed:', error);
+=======
+const getMessageContent = (message) => {
+    return [
+        message?.message?.conversation,
+        message?.message?.extendedTextMessage?.text,
+        message?.message?.imageMessage?.caption,
+        message?.message?.videoMessage?.caption
+    ].find(content => typeof content === 'string') || '';
+};
+
+const initialize = (client) => {
+    client.ev.on('messages.upsert', async ({ messages }) => {
+        try {
+            const processing = messages
+                .filter(msg => 
+                    !msg.key.fromMe && 
+                    Date.now() - (msg.messageTimestamp * 1000) < 120000
+                )
+                .map(async (message) => {
+                    const text = getMessageContent(message).toLowerCase().trim();
+                    if (!text) return;
+
+                    const matches = audioResponses.filter(response => 
+                        response.words.some(word => 
+                            new RegExp(createPattern(word), 'iu').test(text)
+                        )
+                    );
+
+                    if (matches.length === 0) return;
+
+                    console.log(`📩 Matched ${matches.length} triggers in ${message.key.remoteJid}`);
+                    
+                    for (const response of [...new Map(matches.map(r => [r.url, r])).values()]) {
+                        try {
+                            await handleAudioResponse(client, message, response);
+                            await new Promise(resolve => setTimeout(resolve, 1500));
+                        } catch (err) {
+                            console.error(`Audio send failed: ${err.message}`);
+                        }
+                    }
+                });
+
+            await Promise.allSettled(processing);
+        } catch (error) {
+            console.error('Message processing error:', error);
+>>>>>>> db31f93 (c)
         }
     });
 };
 
+<<<<<<< HEAD
 async function processMessage(client, message) {
     try {
         if (message.key.fromMe || !message.message) {
@@ -128,20 +185,45 @@ const handleAudioResponse = async (client, message, audioResponse) => {
         const writer = fs.createWriteStream(audioFilePath);
         audioStream.pipe(writer);
         
+=======
+const handleAudioResponse = async (client, message, response) => {
+    const tempDir = path.join(__dirname, '../temp', Date.now().toString());
+    await fs.ensureDir(tempDir);
+    
+    try {
+        const audioPath = path.join(tempDir, `${response.words[0]}.mp3`);
+        
+        // Download with timeout
+        const writer = fs.createWriteStream(audioPath);
+        const { data } = await axios({
+            url: response.url,
+            method: 'GET',
+            responseType: 'stream',
+            timeout: 20000
+        });
+
+        data.pipe(writer);
+>>>>>>> db31f93 (c)
         await new Promise((resolve, reject) => {
             writer.on('finish', resolve);
             writer.on('error', reject);
         });
 
+<<<<<<< HEAD
         console.log(`Sending audio for: ${audioResponse.words.join(', ')}`);
         
         await client.sendMessage(message.key.remoteJid, { 
             audio: fs.readFileSync(audioFilePath),
+=======
+        await client.sendMessage(message.key.remoteJid, {
+            audio: { url: audioPath },
+>>>>>>> db31f93 (c)
             mimetype: 'audio/mpeg',
             ptt: true
         }, {
             quoted: message,
             upload: true,
+<<<<<<< HEAD
             mediaUploadTimeoutMs: 30000
         });
 
@@ -158,7 +240,21 @@ const handleAudioResponse = async (client, message, audioResponse) => {
             await fs.remove(downloadDir);
         } catch (cleanupError) {
             console.error('Cleanup error:', cleanupError.message);
+=======
+            mediaUploadTimeoutMs: 45000
+        });
+
+        console.log(`✅ Sent ${response.words.join(', ')} to ${message.key.remoteJid}`);
+    } catch (error) {
+        if (error.output?.statusCode === 429) {
+            console.log('⏳ Rate limited - waiting 5 seconds');
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        } else {
+            console.error(`❌ ${response.words.join(', ')} error:`, error.message);
+>>>>>>> db31f93 (c)
         }
+    } finally {
+        await fs.remove(tempDir).catch(() => {});
     }
 };
 

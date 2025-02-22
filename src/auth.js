@@ -1,160 +1,131 @@
-const { makeWASocket, useMultiFileAuthState, delay } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const fs = require('fs-extra');
 const path = require('path');
-const dotenv = require('dotenv');
 const qrcode = require('qrcode-terminal');
 const pino = require('pino');
-dotenv.config();
 
+// Configure logger with pino-pretty
+const logger = pino({
+    level: 'warn', // Log only warnings and errors
+    transport: {
+        target: 'pino-pretty',
+        options: {
+            colorize: true, // Colorize logs
+            translateTime: 'SYS:dd-mm-yyyy HH:MM:ss', // Human-readable timestamps
+            ignore: 'pid,hostname' // Remove unnecessary fields
+        }
+    }
+});
+
+// Session configuration
 const SESSION_PATH = './sessions';
-const SESSION_FILE = path.join(SESSION_PATH, 'session.json');
-const MAX_RETRIES = 5;
-const RETRY_DELAY = 10000;
-
 let clientInstance = null;
-let retryCount = 0;
 let isConnected = false;
-let sessionIdSent = false;
+let retryCount = 0;
+const MAX_RETRIES = 3;
+const RETRY_DELAYS = [1000, 5000, 10000]; // Exponential backoff
+
+// QR Code handler
+function handleQRGeneration(qr) {
+    console.log('⎚ Scan this QR code within 60 seconds:');
+    qrcode.generate(qr, { 
+        small: true,
+        scale: 2
+    });
+    console.log('QR Code URL: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' + encodeURIComponent(qr));
+}
 
 async function initializeWAConnection() {
     try {
         await fs.ensureDir(SESSION_PATH);
         
+        // Clear session on conflict
+        if (retryCount > 0) {
+            await fs.emptyDir(SESSION_PATH);
+            logger.warn('Session cleared for fresh connection');
+        }
+
         const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
         
         const client = makeWASocket({
             auth: state,
             printQRInTerminal: false,
             connectTimeoutMs: 30000,
-            keepAliveIntervalMs: 20000,
+            keepAliveIntervalMs: 15000,
             browser: ['Ubuntu', 'Chrome', '121.0.0'],
-            logger: pino({ level: 'warn' })
+            logger: logger.child({ component: 'baileys' }), // Use pino logger
+            getMessage: async () => ({}),
+            shouldSyncHistoryMessage: () => false,
+            fetchAgent: new (require('https')).Agent({ 
+                keepAlive: true,
+                timeout: 45000
+            })
         });
 
         client.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
 
             if (connection === 'open') {
-                handleSuccessfulConnection(client);
+                isConnected = true;
+                retryCount = 0;
+                logger.info('WhatsApp connection stabilized');
             }
 
             if (connection === 'close') {
+                isConnected = false;
                 await handleConnectionClose(lastDisconnect);
             }
 
-            if (qr && !isConnected) {
+            if (qr) {
                 handleQRGeneration(qr);
             }
         });
 
         client.ev.on('creds.update', saveCreds);
-
-        setupProcessHandlers(client);
         clientInstance = client;
 
         return client;
 
     } catch (error) {
-        console.error('Initialization error:', error.message);
+        logger.error(`Initialization error: ${error.message}`);
         if (retryCount < MAX_RETRIES) {
+            await delay(RETRY_DELAYS[retryCount]);
             retryCount++;
-            await delay(RETRY_DELAY);
             return initializeWAConnection();
         }
-        throw error;
-    }
-}
-
-async function handleSuccessfulConnection(client) {
-    isConnected = true;
-    retryCount = 0;
-    console.log('✓ Successfully connected to WhatsApp');
-
-    if (!sessionIdSent && process.env.ADMIN_NUMBER) {
-        const sessionId = await generateAndSaveSessionId();
-        await sendSessionToAdmin(client, sessionId);
-        sessionIdSent = true;
+        throw new Error('Max connection retries reached');
     }
 }
 
 async function handleConnectionClose(lastDisconnect) {
-    isConnected = false;
     const statusCode = lastDisconnect?.error?.output?.statusCode;
     
-    console.log(`Connection closed. Status: ${statusCode || 'unknown'}`);
+    logger.warn(`Connection closed. Status: ${statusCode || 'unknown'}`);
     
-    if (statusCode !== 401 && retryCount < MAX_RETRIES) {
+    if (statusCode === DisconnectReason.connectionReplaced) {
+        logger.warn('Session replaced elsewhere! Resetting...');
+        await fs.remove(SESSION_PATH);
+        retryCount = 0;
+    }
+
+    if (statusCode === DisconnectReason.loggedOut) {
+        logger.warn('Logged out! Please log in again.');
+        return; // Do not attempt to reconnect
+    }
+
+    if (statusCode !== DisconnectReason.loggedOut && retryCount < MAX_RETRIES) {
+        logger.info(`Reconnecting... (Attempt ${retryCount + 1}/${MAX_RETRIES})`);
+        await delay(RETRY_DELAYS[retryCount]);
         retryCount++;
-        console.log(`↻ Reconnecting... (Attempt ${retryCount}/${MAX_RETRIES})`);
-        await delay(RETRY_DELAY);
-        initializeWAConnection();
+        return initializeWAConnection();
     }
 }
 
-function handleQRGeneration(qr) {
-    console.log('⎚ Scan this QR code within 60 seconds:');
-    qrcode.generate(qr, { small: true });
+// Utility function
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function generateAndSaveSessionId() {
-    const sessionId = process.env.SESSION_ID || 
-        Math.random().toString(36).slice(2, 15) + 
-        Math.random().toString(36).slice(2, 15);
-
-    if (!process.env.SESSION_ID) {
-        await updateEnvFile(sessionId);
-    }
-
-    await fs.writeJSON(SESSION_FILE, {
-        id: sessionId,
-        created: new Date().toISOString(),
-        platform: process.platform
-    }, { spaces: 2 });
-
-    return sessionId;
-}
-
-async function updateEnvFile(sessionId) {
-    const envPath = path.join(process.cwd(), '.env');
-    let envContent = await fs.readFile(envPath, 'utf-8').catch(() => '');
-    
-    const sessionLine = `SESSION_ID=${sessionId}`;
-    envContent = envContent.includes('SESSION_ID=')
-        ? envContent.replace(/SESSION_ID=.*/, sessionLine)
-        : `${envContent}\n${sessionLine}`;
-
-    await fs.writeFile(envPath, envContent);
-}
-
-async function sendSessionToAdmin(client, sessionId) {
-    try {
-        const adminJid = `${process.env.ADMIN_NUMBER.replace(/[^0-9]/g, '')}@s.whatsapp.net`;
-        
-        await client.sendMessage(adminJid, {
-            text: `🔐 *Your Session ID*\n\n` +
-                  `\`\`\`${sessionId}\`\`\`\n\n` +
-                  `Keep this safe for future connections!`
-        });
-        
-        console.log('✓ Session ID sent to admin');
-    } catch (error) {
-        console.error('Failed to send session ID:', error.message);
-    }
-}
-
-function setupProcessHandlers(client) {
-    process.on('SIGINT', async () => {
-        console.log('\n⎋ Gracefully shutting down...');
-        await client.end();
-        process.exit(0);
-    });
-
-    process.on('uncaughtException', async (error) => {
-        console.error('Critical error:', error);
-        await client.end();
-        process.exit(1);
-    });
-}
 module.exports = {
     initializeWAConnection,
     getClient: () => clientInstance,
