@@ -55,8 +55,8 @@ const initializeClient = async () => {
 
         // Print QR code if available
         if (qr) {
-            // Generate and print the QR code in a more readable format
-            qrcode.generate(qr, { small: true }, (qrcode) => {
+            // Generate and print the QR code in a smaller format
+            qrcode.generate(qr, { small: true, margin: 1, errorCorrectionLevel: 'L' }, (qrcode) => {
                 console.log(qrcode);
             });
             console.log('Scan the QR code above to authenticate.');
