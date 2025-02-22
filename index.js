@@ -1,9 +1,9 @@
-const { initializeWAConnection } = require('./src/auth');
+const { initializeClient } = require('./src/auth');
 const autoaudio = require('./src/autoaudio');
 
 (async () => {
     try {
-        const client = await initializeWAConnection();
+        const client = await initializeClient();
         
         client.ev.on('connection.update', (update) => {
             if (update.connection === 'open') {
