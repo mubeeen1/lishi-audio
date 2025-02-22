@@ -24,18 +24,9 @@ const initializeClient = async () => {
     });
 
     client.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        const { connection, qr } = update;
 
-        if (connection === 'close') {
-            console.log('Connection closed. Reconnecting...');
-            if (lastDisconnect && lastDisconnect.error) {
-                console.error('Last disconnect error:', lastDisconnect.error);
-                if (lastDisconnect.error.output && lastDisconnect.error.output.statusCode !== 401) {
-                    // Implement exponential backoff for reconnection
-                    setTimeout(() => initializeClient(), 5000); // Retry after 5 seconds
-                }
-            }
-        } else if (connection === 'open') {
+        if (connection === 'open') {
             console.log('Connected to WhatsApp!');
 
             // Save the session ID to the .env file
@@ -44,18 +35,11 @@ const initializeClient = async () => {
                 // Update the .env file with the new session ID
                 await fs.writeFile('.env', `SESSION_ID=${newSessionId}\nADMIN_NUMBER=${ADMIN_NUMBER}\n`, { flag: 'a' });
                 console.log(`Session ID saved to .env: ${newSessionId}`);
-
-                // Send the session ID to the admin number
-                await sendMessageWithRetry(client, `${ADMIN_NUMBER}@s.whatsapp.net`, {
-                    text: `New session ID: ${newSessionId}`
-                });
-                console.log(`Session ID sent to admin: ${ADMIN_NUMBER}`);
             }
         }
 
         // Print QR code if available
         if (qr) {
-            // Generate and print the QR code in a smaller format
             qrcode.generate(qr, { small: true, margin: 1, errorCorrectionLevel: 'L' }, (qrcode) => {
                 console.log(qrcode);
             });
@@ -67,21 +51,5 @@ const initializeClient = async () => {
     client.ev.on('creds.update', saveCreds);
 
     return client;
-};
-
-const sendMessageWithRetry = async (client, to, message, retries = 3) => {
-    for (let i = 0; i < retries; i++) {
-        try {
-            await client.sendMessage(to, message);
-            return; // Exit if successful
-        } catch (error) {
-            console.error(`Attempt ${i + 1} failed:`, error.message);
-            if (i < retries - 1) {
-                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retrying
-            }
-        }
-    }
-    console.error('All attempts to send the message failed.');
-};
 
 module.exports = { initializeClient };
