@@ -3,7 +3,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const dotenv = require('dotenv');
 const qrcode = require('qrcode-terminal');
-
+const pino = reauire('pino');
 dotenv.config();
 
 const SESSION_PATH = './sessions';
@@ -28,7 +28,7 @@ async function initializeWAConnection() {
             connectTimeoutMs: 30000,
             keepAliveIntervalMs: 20000,
             browser: ['Ubuntu', 'Chrome', '121.0.0'],
-            logger: { level: 'warn' }
+            logger: pino({ level: 'warn' })
         });
 
         client.ev.on('connection.update', async (update) => {
