@@ -18,7 +18,6 @@ const initializeClient = async () => {
     // Check if the session ID is valid
     if (SESSION_ID) {
         console.log(`Using session ID from .env: ${SESSION_ID}`);
-        // You can add additional validation logic here if needed
     } else {
         console.warn('No SESSION_ID found in .env file. Proceeding without it.');
     }
@@ -59,11 +58,6 @@ const initializeClient = async () => {
         console.log('Chat sync skipped.');
     });
 
-    return client;
-};
-
-const createNewSession = async () => {
-    const client = await initializeClient();
     return client;
 };
 
