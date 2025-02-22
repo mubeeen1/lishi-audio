@@ -6,6 +6,7 @@ const qrcode = require('qrcode-terminal');
 dotenv.config();
 
 const SESSION_PATH = './sessions';
+const SESSION_ID = process.env.SESSION_ID; // Load session ID from .env file
 
 const initializeClient = async () => {
     // Ensure the sessions directory exists
@@ -13,6 +14,14 @@ const initializeClient = async () => {
 
     // Use multi-file auth state to manage session
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
+
+    // Check if the session ID is valid
+    if (SESSION_ID) {
+        console.log(`Using session ID from .env: ${SESSION_ID}`);
+        // You can add additional validation logic here if needed
+    } else {
+        console.warn('No SESSION_ID found in .env file. Proceeding without it.');
+    }
 
     const client = makeWASocket({
         auth: state,
@@ -28,7 +37,6 @@ const initializeClient = async () => {
             if (lastDisconnect && lastDisconnect.error) {
                 console.error('Last disconnect error:', lastDisconnect.error);
                 if (lastDisconnect.error.output && lastDisconnect.error.output.statusCode !== 401) {
-                    // Attempt to reconnect
                     await initializeClient();
                 }
             }
