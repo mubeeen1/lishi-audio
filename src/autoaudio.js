@@ -18,7 +18,9 @@ const initialize = (client) => {
         const text = message.message.conversation || '';
         console.log(`Received message: ${text}`); // Log the received message
 
-        const matchedResponse = audioResponses.find(response => text.includes(response.word));
+        // Convert the message to lowercase for case-insensitive matching
+        const lowerCaseText = text.toLowerCase();
+        const matchedResponse = audioResponses.find(response => lowerCaseText.includes(response.word));
 
         if (matchedResponse) {
             console.log(`Matched keyword: ${matchedResponse.word}`); // Log matched keyword
