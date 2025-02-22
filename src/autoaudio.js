@@ -25,6 +25,7 @@ const audioResponses = [
     { words: ["hero", "happy", "smile"], url: "https://archive.org/download/grave_202502/happy.mp3" },
     { words: ["khoya", "beinteha", "be-inteha", "be inteha"], url: "https://archive.org/download/grave_202502/khoya.mp3" },
 ];
+
 const getMessageText = (message) => {
     const messageTypes = [
         'conversation',
@@ -49,8 +50,8 @@ const initialize = (client) => {
             const now = Date.now();
             
             for (const message of msg.messages) {
-                // Skip messages older than 1 minutes
-                if (now - message.messageTimestamp * 1000 > 60000) continue;
+                // Skip messages older than 2 minutes
+                if (now - message.messageTimestamp * 1000 > 120000) continue;
 
                 processingQueue.push(processMessage(client, message));
             }
@@ -93,10 +94,11 @@ async function processMessage(client, message) {
             matchedResponses.map(item => [item.url, item])
         ).values()];
 
-        // Process responses in parallel with rate limiting
+        // Fixed Promise.allSettled syntax
         await Promise.allSettled(
             uniqueResponses.map(response => 
                 handleAudioResponse(client, message, response)
+            )
         );
         
     } catch (error) {
