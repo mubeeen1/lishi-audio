@@ -3,7 +3,6 @@ const fs = require('fs-extra');
 const path = require('path');
 const { Boom } = require('@hapi/boom');
 
-<<<<<<< HEAD
 const escapeRegExp = (string) => {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 =======
