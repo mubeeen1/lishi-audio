@@ -6,7 +6,7 @@ const audioResponses = [
     { word: "hello", url: "https://example.com/audio/hello.ppt" },
     { word: "help", url: "https://example.com/audio/help.ppt" },
     { word:"dj", url :"https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/menu.m4a"},
-   {word: "mubeen", url:"https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/sigma.m4a" },
+   {word: "mubeen", url:"https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/sigma.m4a"}
 ];
 
 const initialize = (client) => {
@@ -15,10 +15,15 @@ const initialize = (client) => {
         if (message.key.fromMe || !message.message) return;
 
         const text = message.message.conversation || '';
+        console.log(`Received message: ${text}`); // Log the received message
+
         const matchedResponse = audioResponses.find(response => text.includes(response.word));
 
         if (matchedResponse) {
+            console.log(`Matched keyword: ${matchedResponse.word}`); // Log matched keyword
             await handleAudioResponse(client, message, matchedResponse);
+        } else {
+            console.log('No matching keyword found.'); // Log if no match
         }
     });
 };

@@ -1,55 +1,57 @@
-const { create, Client } = require('@whiskeysockets/baileys');
+const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const fs = require('fs-extra');
 const dotenv = require('dotenv');
+const qrcode = require('qrcode-terminal');
 
 dotenv.config();
 
-const SESSION_PATH = './sessions/creds.json';
+const SESSION_PATH = './sessions';
 
 const initializeClient = async (sessionId) => {
-    let client;
+    // Ensure the sessions directory exists
+    await fs.ensureDir(SESSION_PATH);
 
-    if (sessionId) {
-        try {
-            const sessionData = await fs.readJson(SESSION_PATH);
-            client = create({ auth: sessionData });
-            console.log('Session loaded successfully.');
-        } catch (error) {
-            console.error('Failed to load session:', error);
-            return await createNewSession();
-        }
-    } else {
-        client = await createNewSession();
-    }
+    // Use multi-file auth state to manage session
+    const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
 
-    client.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+    const client = makeWASocket({
+        auth: state,
+        printQRInTerminal: false, // Disable built-in QR printing
+    });
+
+    client.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
+
         if (connection === 'close') {
             console.log('Connection closed. Reconnecting...');
-            if (lastDisconnect.error.output.statusCode !== 401) {
-                initializeClient(sessionId);
+            if (lastDisconnect && lastDisconnect.error) {
+                // Check if lastDisconnect.error.output is defined
+                if (lastDisconnect.error.output && lastDisconnect.error.output.statusCode !== 401) {
+                    await initializeClient(sessionId);
+                }
+            } else {
+                // If lastDisconnect is undefined, just reconnect
+                await initializeClient(sessionId);
             }
         } else if (connection === 'open') {
             console.log('Connected to WhatsApp!');
         }
+
+        // Print QR code if available
+        if (qr) {
+            qrcode.generate(qr, { small: true }); // Print QR code in terminal
+            console.log('Scan the QR code above to authenticate.');
+        }
     });
+
+    // Save credentials on update
+    client.ev.on('creds.update', saveCreds);
 
     return client;
 };
 
 const createNewSession = async () => {
-    const client = create();
-    client.ev.on('creds.update', async (creds) => {
-        await fs.outputJson(SESSION_PATH, creds);
-        process.env.SESSION_ID = creds.me.id; // Update session ID in .env
-        console.log('Session credentials saved.');
-    });
-
-    client.ev.on('qr', (qr) => {
-        console.log('Scan this QR code:', qr);
-    });
-
-    await client.connect();
+    const client = await initializeClient();
     return client;
 };
 
