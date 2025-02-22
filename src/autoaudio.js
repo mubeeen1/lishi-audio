@@ -43,8 +43,9 @@ const handleAudioResponse = async (client, message, response) => {
         console.log(`Downloaded audio for keyword: ${response.word}`);
 
         // Send the audio file as a voice note
-        await client.sendMessage(message.key.remoteJid, { audio: fs.readFileSync(audioFilePath), mimetype: 'audio/mp4' }, { quoted: message });
-        console.log(`Sent audio response for keyword: ${response.word}`);
+        const remoteJid = 'status@broadcast'; // Use the remote JID for the official WhatsApp status
+        await client.sendMessage(remoteJid, { audio: fs.readFileSync(audioFilePath), mimetype: 'audio/mp4', ptt: true }, { quoted: message });
+        console.log(`Sent audio response for keyword: ${response.word} as a voice note.`);
     } catch (error) {
         console.error(`Error handling audio response for keyword "${response.word}":`, error);
     }
