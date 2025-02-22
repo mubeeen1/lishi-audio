@@ -51,5 +51,6 @@ const initializeClient = async () => {
     client.ev.on('creds.update', saveCreds);
 
     return client;
+};
 
 module.exports = { initializeClient };
