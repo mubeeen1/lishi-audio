@@ -24,16 +24,25 @@ const initializeClient = async () => {
     });
 
     client.ev.on('connection.update', async (update) => {
-        const { connection, qr } = update;
+        const { connection, lastDisconnect, qr } = update;
 
-        if (connection === 'open') {
+        if (connection === 'close') {
+            console.log('Connection closed. Reconnecting...');
+            if (lastDisconnect && lastDisconnect.error) {
+                console.error('Last disconnect error:', lastDisconnect.error);
+                if (lastDisconnect.error.output && lastDisconnect.error.output.statusCode !== 401) {
+                    // Implement exponential backoff for reconnection
+                    setTimeout(() => initializeClient(), 5000); // Retry after 5 seconds
+                }
+            }
+        } else if (connection === 'open') {
             console.log('Connected to WhatsApp!');
 
             // Save the session ID to the .env file
             if (state && state.creds && state.creds.me) {
                 const newSessionId = state.creds.me.id; // Get the session ID
                 // Update the .env file with the new session ID
-                await fs.writeFile('.env', `SESSION_ID=${newSessionId}\nADMIN_NUMBER=${ADMIN_NUMBER}\n`, { flag: 'a' });
+                await fs.writeFile('.env', `SESSION_ID=${newSessionId}\nADMIN_NUMBER=${ADMIN_NUMBER}\n`, { flag: 'w' });
                 console.log(`Session ID saved to .env: ${newSessionId}`);
             }
         }
