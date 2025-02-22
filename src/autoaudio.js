@@ -2,11 +2,12 @@ const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
 
+// Define audio responses with keywords and their corresponding URLs
 const audioResponses = [
-    { word: "hello", url: "https://example.com/audio/hello.ppt" },
-    { word: "help", url: "https://example.com/audio/help.ppt" },
-    { word:"dj", url :"https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/menu.m4a"},
-   {word: "mubeen", url:"https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/sigma.m4a"}
+    { word: "hello", url: "https://example.com/audio/hello.mp3" },
+    { word: "help", url: "https://example.com/audio/help.mp3" },
+    { word: "dj", url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/menu.m4a" },
+    { word: "mubeen", url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/sigma.m4a" }
 ];
 
 const initialize = (client) => {
@@ -29,7 +30,12 @@ const initialize = (client) => {
 };
 
 const handleAudioResponse = async (client, message, response) => {
-    const audioFilePath = path.join(__dirname, '../downloads', `${response.word}.ppt`);
+    // Ensure the downloads directory exists
+    const downloadDir = path.join(__dirname, '../downloads');
+    await fs.ensureDir(downloadDir); // Create the downloads directory if it doesn't exist
+
+    // Use a generic name for the downloaded file
+    const audioFilePath = path.join(downloadDir, `audio_response.mp3`);
 
     try {
         // Download the audio file
