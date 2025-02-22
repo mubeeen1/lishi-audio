@@ -55,18 +55,16 @@ const initializeClient = async () => {
 
         // Print QR code if available
         if (qr) {
-            qrcode.generate(qr, { small: true }); // Print QR code in terminal
+            // Generate and print the QR code in a more readable format
+            qrcode.generate(qr, { small: true }, (qrcode) => {
+                console.log(qrcode);
+            });
             console.log('Scan the QR code above to authenticate.');
         }
     });
 
     // Save credentials on update
     client.ev.on('creds.update', saveCreds);
-
-    // Skip chat sync by ignoring history notifications
-    client.ev.on('chats.set', () => {
-        console.log('Chat sync skipped.');
-    });
 
     return client;
 };
