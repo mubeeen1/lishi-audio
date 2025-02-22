@@ -2,7 +2,12 @@ const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
 
-// Define audio responses with keywords and their corresponding URLs
+// Helper function to safely escape regex characters
+const escapeRegExp = (string) => {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+// Enhanced audio responses configuration
 const audioResponses = [
     { words: ["dj"], url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/menu.m4a" },
     { words: ["mubeen", "coder"], url: "https://archive.org/download/grave_202502/coder.mp3" },
@@ -22,32 +27,68 @@ const audioResponses = [
     { words: ["khoya", "beinteha", "be-inteha", "be inteha"], url: "https://archive.org/download/grave_202502/khoya.mp3" },
 ];
 
+// Unified text extraction from different message types
+const getMessageText = (message) => {
+    const messageTypes = [
+        'conversation',
+        'extendedTextMessage.text',
+        'imageMessage.caption',
+        'videoMessage.caption'
+    ];
+    
+    return messageTypes.reduce((acc, type) => {
+        if (acc) return acc;
+        const parts = type.split('.');
+        return parts.reduce((obj, part) => obj?.[part], message.message);
+    }, '') || '';
+};
+
 const initialize = (client) => {
     client.ev.on('messages.upsert', async (msg) => {
         const messages = msg.messages;
         for (const message of messages) {
-            if (!message.message || (message.key.fromMe && !message.message.conversation)) continue;
+            try {
+                // Skip messages from bot itself and invalid messages
+                if (message.key.fromMe || !message.message) {
+                    console.log('Skipped self/invalid message');
+                    continue;
+                }
 
-            const text = message.message.conversation || '';
-            const lowerCaseText = text.toLowerCase();
+                const text = getMessageText(message);
+                console.log(`Processing message: "${text}"`);
 
-            // Find all matching responses
-            const matchedResponses = audioResponses.filter(response => 
-                response.words.some(word => 
-                    new RegExp(`\\b${word}\\b`, 'i').test(lowerCaseText)
-                )
-            );
+                if (!text.trim()) {
+                    console.log('Empty message content');
+                    continue;
+                }
 
-            // Deduplicate responses with same URL
-            const uniqueResponses = [...new Map(
-                matchedResponses.map(item => [item.url, item])
-            ).values()];
+                // Enhanced keyword matching logic
+                const matchedResponses = audioResponses.filter(response => 
+                    response.words.some(word => {
+                        const escapedWord = escapeRegExp(word);
+                        const isEmoji = /^\p{Emoji}$/u.test(word);
+                        const pattern = isEmoji 
+                            ? escapedWord  // Exact emoji match
+                            : `(?:^|\\s)${escapedWord}(?:$|\\s|[.,!?])`;  // Word boundary with punctuation support
+                        
+                        return new RegExp(pattern, 'iu').test(text);
+                    })
+                );
 
-            // Process each unique response
-            for (const response of uniqueResponses) {
-                console.log(`Matched keywords: ${response.words.join(', ')}`);
-                await handleAudioResponse(client, message, response);
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Rate limit
+                console.log(`Matched ${matchedResponses.length} responses`);
+
+                // Deduplicate and process responses
+                const uniqueResponses = [...new Map(
+                    matchedResponses.map(item => [item.url, item])
+                ).values()];
+
+                for (const response of uniqueResponses) {
+                    console.log(`Triggering response for: ${response.words.join(', ')}`);
+                    await handleAudioResponse(client, message, response);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            } catch (error) {
+                console.error('Message processing error:', error);
             }
         }
     });
@@ -57,59 +98,50 @@ const handleAudioResponse = async (client, message, response) => {
     const downloadDir = path.join(__dirname, '../downloads');
     await fs.ensureDir(downloadDir);
     
-    // Generate unique filename
-    const filename = `${Date.now()}_${response.words[0].replace(/[^a-z0-9]/gi, '_')}.mp3`;
+    const filename = `${Date.now()}_${response.words[0].replace(/[^\p{L}\p{N}]/giu, '_')}.mp3`;
     const audioFilePath = path.join(downloadDir, filename);
 
     try {
-        // Download and validate file
-        await downloadFile(response.url, audioFilePath);
-        console.log(`Downloaded audio for: ${response.words.join(', ')}`);
-
-        // Read file asynchronously
-        const audioBuffer = await fs.readFile(audioFilePath);
-        
-        // Send with correct MIME type
-        await client.sendMessage(message.key.remoteJid, { 
-            audio: audioBuffer, 
-            mimetype: 'audio/mpeg',
-            ptt: true 
-        }, { quoted: message });
-
-        console.log(`Sent response for: ${response.words.join(', ')}`);
-    } catch (error) {
-        console.error(`Error handling "${response.words.join(', ')}":`, error.message);
-    } finally {
-        // Cleanup file
-        try {
-            await fs.unlink(audioFilePath);
-        } catch (cleanupError) {
-            console.error('Cleanup failed:', cleanupError.message);
+        // Validate URL before download
+        console.log(`Downloading from: ${response.url}`);
+        const headResponse = await axios.head(response.url);
+        if (headResponse.status !== 200) {
+            throw new Error(`Invalid response status: ${headResponse.status}`);
         }
-    }
-};
 
-const downloadFile = async (url, outputPath) => {
-    const writer = fs.createWriteStream(outputPath);
-
-    try {
+        // Download with timeout
+        const writer = fs.createWriteStream(audioFilePath);
         const response = await axios({
-            url,
+            url: response.url,
             method: 'GET',
             responseType: 'stream',
-            validateStatus: status => status === 200
+            timeout: 10000
         });
 
         response.data.pipe(writer);
 
-        return new Promise((resolve, reject) => {
+        await new Promise((resolve, reject) => {
             writer.on('finish', resolve);
             writer.on('error', reject);
         });
+
+        // Send audio with optimized settings
+        await client.sendMessage(message.key.remoteJid, { 
+            audio: fs.readFileSync(audioFilePath),
+            mimetype: 'audio/mpeg',
+            ptt: true,
+            waveform: Buffer.from([0x00, 0x00, 0x00, 0x00, 0x00]) // Improves compatibility
+        }, { quoted: message });
+
+        console.log(`Successfully sent: ${response.words.join(', ')}`);
     } catch (error) {
-        // Cleanup partial downloads
-        await fs.unlink(outputPath).catch(() => {});
-        throw new Error(`Download failed: ${error.message}`);
+        console.error(`Response error [${response.words.join(', ')}]:`, error.message);
+    } finally {
+        try {
+            await fs.remove(audioFilePath);
+        } catch (cleanupError) {
+            console.error('Cleanup error:', cleanupError.message);
+        }
     }
 };
 
