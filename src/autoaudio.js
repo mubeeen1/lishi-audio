@@ -7,21 +7,21 @@ const audioResponses = [
     { words: ["hello"], url: "https://example.com/audio/hello.mp3" },
     { words: ["help"], url: "https://example.com/audio/help.mp3" },
     { words: ["dj"], url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/menu.m4a" },
-    { words: ["mubeen", "coder"], url: "https://archive.org/download/grave_202502/coder.mp3" },
-    { words: ["grave", "🪦"], url: "https://archive.org/download/grave_202502/grave.mp3" },
-    { words: ["waiting"], url: "https://archive.org/download/grave_202502/waiting.mp3" },
-    { words: ["spiderman", "🕷️", "🕸️"], url: "https://archive.org/download/grave_202502/spiderman.mp3" },
-    { words: ["eyes", "into eyes"], url: "https://archive.org/download/grave_202502/eyes.mp3" },
-    { words: ["nazroon", "nazron", "👀", "ankhein"], url: "https://archive.org/download/grave_202502/teri%20nazron%20ny.mp3" },
-    { words: ["drift"], url: "https://archive.org/download/grave_202502/drift.mp3" },
-    { words: ["bye", "👋"], url: "https://archive.org/download/grave_202502/bye.mp3" },
-    { words: ["forever"], url: "https://archive.org/download/grave_202502/forever.mp3" },
-    { words: ["romantic"], url: "https://archive.org/download/grave_202502/romantic.mp3" },
-    { words: ["heartbeat", "💓", "❣️", "heart beat"], url: "https://archive.org/download/grave_202502/heart%20beat.mp3" },
-    { words: ["oh my god"], url: "https://archive.org/download/grave_202502/oh%20my%20god.mp3" },
-    { words: ["left"], url: "https://archive.org/download/grave_202502/left.mp3" },
-    { words: ["hero", "happy", "smile"], url: "https://archive.org/download/grave_202502/happy.mp3" },
-    { words: ["khoya", "beinteha", "be-inteha", "be inteha"], url: "https://archive.org/download/grave_202502/khoya.mp3" },
+    { words: ["mubeen", "coder"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/coder.mp3" },
+    { words: ["grave", "🪦"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/grave.mp3" },
+    { words: ["waiting"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/waiting.mp3" },
+    { words: ["spiderman", "🕷️", "🕸️"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/spiderman.mp3" },
+    { words: ["eyes", "into eyes"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/eyes.mp3" },
+    { words: ["nazroon", "nazron", "👀", "ankhein"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/teri%20nazron%20ny.mp3" },
+    { words: ["drift"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/drift.mp3" },
+    { words: ["bye", "👋"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/bye.mp3" },
+    { words: ["forever"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/forever.mp3" },
+    { words: ["romantic"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/romantic.mp3" },
+    { words: ["heartbeat", "💓", "❣️", "heart beat"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/heart%20beat.mp3" },
+    { words: ["oh my god"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/oh%20my%20god.mp3" },
+    { words: ["left"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/left.mp3" },
+    { words: ["hero", "happy", "smile"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/happy.mp3" },
+    { words: ["khoya", "beinteha", "be-inteha", "be inteha"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/khoya.mp3" },
 ];
 
 const initialize = (client) => {
@@ -44,13 +44,11 @@ const initialize = (client) => {
                 )
             );
 
-            // Handle all matched responses concurrently
-            const downloadPromises = matchedResponses.map(matchedResponse => 
-                handleAudioResponse(client, message, matchedResponse)
-            );
-
-            // Wait for all downloads to complete
-            await Promise.all(downloadPromises);
+            // Handle all matched responses
+            for (const matchedResponse of matchedResponses) {
+                console.log(`Matched keyword: ${matchedResponse.words.join(', ')}`); // Log matched keywords
+                await handleAudioResponse(client, message, matchedResponse);
+            }
         }
     });
 };
@@ -71,22 +69,8 @@ const handleAudioResponse = async (client, message, response) => {
     try {
         console.log(`Starting download for: ${response.words.join(', ')}`);
         
-        // Download the audio file
-        const { data: audioStream } = await axios({
-            url: response.url,
-            method: 'GET',
-            responseType: 'stream',
-            timeout: 15000,
-            validateStatus: status => status === 200
-        });
-
-        const writer = fs.createWriteStream(audioFilePath);
-        audioStream.pipe(writer);
-
-        await new Promise((resolve, reject) => {
-            writer.on('finish', resolve);
-            writer.on('error', reject);
-        });
+        // Download the audio file with retry logic
+        await downloadFileWithRetry(response.url, audioFilePath);
 
         console.log(`Successfully downloaded: ${response.words.join(', ')}`);
 
@@ -105,6 +89,35 @@ const handleAudioResponse = async (client, message, response) => {
     } finally {
         // Clean up the downloaded file
         await fs.remove(audioFilePath).catch(err => console.error('Cleanup error:', err.message));
+    }
+};
+
+const downloadFileWithRetry = async (url, filePath, retries = 3) => {
+    for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+            const { data: audioStream } = await axios({
+                url: url,
+                method: 'GET',
+                responseType: 'stream',
+                timeout: 15000,
+                validateStatus: status => status === 200
+            });
+
+            const writer = fs.createWriteStream(filePath);
+            audioStream.pipe(writer);
+
+            await new Promise((resolve, reject) => {
+                writer.on('finish', resolve);
+                writer.on('error', reject);
+            });
+
+            return; // Exit if successful
+        } catch (error) {
+            console.error(`Download attempt ${attempt + 1} failed: ${error.message}`);
+            if (attempt === retries - 1) {
+                throw new Error(`Failed to download file after ${retries} attempts: ${url}`);
+            }
+        }
     }
 };
 
