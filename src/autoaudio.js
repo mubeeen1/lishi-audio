@@ -7,7 +7,8 @@ const audioResponses = [
     { word: "hello", url: "https://example.com/audio/hello.mp3" },
     { word: "help", url: "https://example.com/audio/help.mp3" },
     { word: "dj", url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/menu.m4a" },
-    { word: "mubeen", url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/sigma.m4a" }
+    { word: "mubeen", url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/sigma.m4a" },
+    {word: "grave ", url: "https://www.mediafire.com/file/3mhksjgr7go65dd/grave.mp3/file?dkey=ikgk2y0o9ip&r=1007"}
 ];
 
 const initialize = (client) => {
