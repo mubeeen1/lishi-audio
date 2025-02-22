@@ -4,31 +4,33 @@ const path = require('path');
 
 // Define audio responses with keywords and their corresponding URLs
 const audioResponses = [
-    { word: "hello", url: "https://example.com/audio/hello.mp3" },
-    { word: "help", url: "https://example.com/audio/help.mp3" },
-    { word: "dj", url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/menu.m4a" },
-    { word: "mubeen", url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/sigma.m4a" },
-    {word: "grave ", url: "https://www.mediafire.com/file/3mhksjgr7go65dd/grave.mp3/file?dkey=ikgk2y0o9ip&r=1007"}
+    { words: ["hello"], url: "https://example.com/audio/hello.mp3" },
+    { words: ["help"], url: "https://example.com/audio/help.mp3" },
+    { words: ["dj"], url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/menu.m4a" },
+    { words: ["mubeen"], url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/sigma.m4a" },
+    { words: ["grave", "🪦"], url: "https://www.mediafire.com/file/3mhksjgr7go65dd/grave.mp3/file?dkey=ikgk2y0o9ip&r=1007" }
 ];
 
 const initialize = (client) => {
     client.ev.on('messages.upsert', async (msg) => {
-        const message = msg.messages[0];
-        // Allow the bot to respond to its own messages
-        if (!message.message || (message.key.fromMe && !message.message.conversation)) return;
+        const messages = msg.messages; // Get all messages
+        for (const message of messages) {
+            // Allow the bot to respond to its own messages
+            if (!message.message || (message.key.fromMe && !message.message.conversation)) continue;
 
-        const text = message.message.conversation || '';
-        console.log(`Received message: ${text}`); // Log the received message
+            const text = message.message.conversation || '';
+            const lowerCaseText = text.toLowerCase(); // Convert to lowercase for case-insensitive matching
 
-        // Convert the message to lowercase for case-insensitive matching
-        const lowerCaseText = text.toLowerCase();
-        const matchedResponse = audioResponses.find(response => lowerCaseText.includes(response.word));
+            // Check for matching keywords
+            const matchedResponses = audioResponses.filter(response => 
+                response.words.some(word => lowerCaseText.includes(word))
+            );
 
-        if (matchedResponse) {
-            console.log(`Matched keyword: ${matchedResponse.word}`); // Log matched keyword
-            await handleAudioResponse(client, message, matchedResponse);
-        } else {
-            console.log('No matching keyword found.'); // Log if no match
+            // Handle all matched responses
+            for (const matchedResponse of matchedResponses) {
+                console.log(`Matched keyword: ${matchedResponse.words.join(', ')}`); // Log matched keywords
+                await handleAudioResponse(client, message, matchedResponse);
+            }
         }
     });
 };
@@ -44,18 +46,15 @@ const handleAudioResponse = async (client, message, response) => {
     try {
         // Download the audio file
         await downloadFile(response.url, audioFilePath);
-        console.log(`Downloaded audio for keyword: ${response.word}`);
+        console.log(`Downloaded audio for keywords: ${response.words.join(', ')}`);
 
         // Send the audio file as a voice note to the original sender
         const audioBuffer = fs.readFileSync(audioFilePath);
         
-        // Log the size of the audio buffer to ensure it's being read correctly
-        console.log(`Audio buffer size: ${audioBuffer.length} bytes`);
-
         await client.sendMessage(message.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mp4', ptt: true }, { quoted: message });
-        console.log(`Sent audio response for keyword: ${response.word} as a voice note.`);
+        console.log(`Sent audio response for keywords: ${response.words.join(', ')}`);
     } catch (error) {
-        console.error(`Error handling audio response for keyword "${response.word}":`, error);
+        console.error(`Error handling audio response for keywords "${response.words.join(', ')}":`, error);
     }
 };
 
