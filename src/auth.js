@@ -3,7 +3,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const dotenv = require('dotenv');
 const qrcode = require('qrcode-terminal');
-const pino = reauire('pino');
+const pino = require('pino');
 dotenv.config();
 
 const SESSION_PATH = './sessions';
