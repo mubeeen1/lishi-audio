@@ -13,7 +13,6 @@ const createPattern = (word) => {
     return /[\p{Emoji}]/u.test(word) 
         ? escaped 
         : `(?<!\\w)${escaped}(?!\\w)`;
->>>>>>> db31f93 (c)
 };
 
 const audioResponses = [
