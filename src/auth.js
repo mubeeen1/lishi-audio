@@ -155,7 +155,6 @@ function setupProcessHandlers(client) {
         process.exit(1);
     });
 }
-
 module.exports = {
     initializeWAConnection,
     getClient: () => clientInstance,
