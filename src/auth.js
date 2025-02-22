@@ -47,6 +47,11 @@ const initializeClient = async () => {
     // Save credentials on update
     client.ev.on('creds.update', saveCreds);
 
+    // Skip chat sync by ignoring history notifications
+    client.ev.on('chats.set', () => {
+        console.log('Chat sync skipped.');
+    });
+
     return client;
 };
 
