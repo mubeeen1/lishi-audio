@@ -2,11 +2,13 @@ const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys
 const fs = require('fs-extra');
 const dotenv = require('dotenv');
 const qrcode = require('qrcode-terminal');
+const { exec } = require('child_process');
 
 dotenv.config();
 
 const SESSION_PATH = './sessions';
 const SESSION_ID = process.env.SESSION_ID; // Load session ID from .env file
+const ADMIN_NUMBER = process.env.ADMIN_NUMBER; // Load admin number from .env file
 
 const initializeClient = async () => {
     // Ensure the sessions directory exists
@@ -15,17 +17,12 @@ const initializeClient = async () => {
     // Use multi-file auth state to manage session
     const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
 
-    // Check if the session ID is valid
-    if (SESSION_ID) {
-        console.log(`Using session ID from .env: ${SESSION_ID}`);
-    } else {
-        console.warn('No SESSION_ID found in .env file. Proceeding without it.');
-    }
-
+    // Create the client with a custom User-Agent
     const client = makeWASocket({
         auth: state,
         printQRInTerminal: false, // Disable built-in QR printing
-        connectTimeoutMs: 30000, // Increase timeout to 30 seconds
+        connectTimeoutMs: 60000, // Increase timeout to 60 seconds
+        browser: ['MacOS Safari', '2025', 'Sonoma'], // Set custom User-Agent
     });
 
     client.ev.on('connection.update', async (update) => {
@@ -41,6 +38,22 @@ const initializeClient = async () => {
             }
         } else if (connection === 'open') {
             console.log('Connected to WhatsApp!');
+
+            // Save the session ID to the .env file
+            if (state && state.creds && state.creds.me) {
+                const newSessionId = state.creds.me.id; // Get the session ID
+                if (newSessionId !== SESSION_ID) {
+                    // Update the .env file with the new session ID
+                    await fs.writeFile('.env', `SESSION_ID=${newSessionId}\nADMIN_NUMBER=${ADMIN_NUMBER}\n`, { flag: 'a' });
+                    console.log(`Session ID saved to .env: ${newSessionId}`);
+
+                    // Send the session ID to the admin number
+                    await client.sendMessage(ADMIN_NUMBER + '@s.whatsapp.net', {
+                        text: `New session ID: ${newSessionId}`
+                    });
+                    console.log(`Session ID sent to admin: ${ADMIN_NUMBER}`);
+                }
+            }
         }
 
         // Print QR code if available
