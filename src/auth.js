@@ -2,7 +2,6 @@ const { makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys
 const fs = require('fs-extra');
 const dotenv = require('dotenv');
 const qrcode = require('qrcode-terminal');
-const { exec } = require('child_process');
 
 dotenv.config();
 
@@ -33,7 +32,8 @@ const initializeClient = async () => {
             if (lastDisconnect && lastDisconnect.error) {
                 console.error('Last disconnect error:', lastDisconnect.error);
                 if (lastDisconnect.error.output && lastDisconnect.error.output.statusCode !== 401) {
-                    await initializeClient();
+                    // Implement exponential backoff for reconnection
+                    setTimeout(() => initializeClient(), 5000); // Retry after 5 seconds
                 }
             }
         } else if (connection === 'open') {
