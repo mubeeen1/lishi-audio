@@ -1,13 +1,12 @@
 const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
+const { Boom } = require('@hapi/boom');
 
-// Helper function to safely escape regex characters
 const escapeRegExp = (string) => {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
 
-// Enhanced audio responses configuration
 const audioResponses = [
     { words: ["dj"], url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/menu.m4a" },
     { words: ["mubeen", "coder"], url: "https://archive.org/download/grave_202502/coder.mp3" },
@@ -26,14 +25,14 @@ const audioResponses = [
     { words: ["hero", "happy", "smile"], url: "https://archive.org/download/grave_202502/happy.mp3" },
     { words: ["khoya", "beinteha", "be-inteha", "be inteha"], url: "https://archive.org/download/grave_202502/khoya.mp3" },
 ];
-
-// Unified text extraction from different message types
 const getMessageText = (message) => {
     const messageTypes = [
         'conversation',
         'extendedTextMessage.text',
         'imageMessage.caption',
-        'videoMessage.caption'
+        'videoMessage.caption',
+        'buttonsResponseMessage.selectedButtonId',
+        'listResponseMessage.title'
     ];
     
     return messageTypes.reduce((acc, type) => {
@@ -45,100 +44,116 @@ const getMessageText = (message) => {
 
 const initialize = (client) => {
     client.ev.on('messages.upsert', async (msg) => {
-        const messages = msg.messages;
-        for (const message of messages) {
-            try {
-                // Skip messages from bot itself and invalid messages
-                if (message.key.fromMe || !message.message) {
-                    console.log('Skipped self/invalid message');
-                    continue;
-                }
+        try {
+            const processingQueue = [];
+            const now = Date.now();
+            
+            for (const message of msg.messages) {
+                // Skip messages older than 1 minutes
+                if (now - message.messageTimestamp * 1000 > 60000) continue;
 
-                const text = getMessageText(message);
-                console.log(`Processing message: "${text}"`);
-
-                if (!text.trim()) {
-                    console.log('Empty message content');
-                    continue;
-                }
-
-                // Enhanced keyword matching logic
-                const matchedResponses = audioResponses.filter(response => 
-                    response.words.some(word => {
-                        const escapedWord = escapeRegExp(word);
-                        const isEmoji = /^\p{Emoji}$/u.test(word);
-                        const pattern = isEmoji 
-                            ? escapedWord  // Exact emoji match
-                            : `(?:^|\\s)${escapedWord}(?:$|\\s|[.,!?])`;  // Word boundary with punctuation support
-                        
-                        return new RegExp(pattern, 'iu').test(text);
-                    })
-                );
-
-                console.log(`Matched ${matchedResponses.length} responses`);
-
-                // Deduplicate and process responses
-                const uniqueResponses = [...new Map(
-                    matchedResponses.map(item => [item.url, item])
-                ).values()];
-
-                for (const response of uniqueResponses) {
-                    console.log(`Triggering response for: ${response.words.join(', ')}`);
-                    await handleAudioResponse(client, message, response);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-            } catch (error) {
-                console.error('Message processing error:', error);
+                processingQueue.push(processMessage(client, message));
             }
+
+            // Process messages in parallel with concurrency control
+            await Promise.allSettled(processingQueue);
+        } catch (error) {
+            console.error('Message processing failed:', error);
         }
     });
 };
 
-const handleAudioResponse = async (client, message, response) => {
-    const downloadDir = path.join(__dirname, '../downloads');
+async function processMessage(client, message) {
+    try {
+        if (message.key.fromMe || !message.message) {
+            console.log('Skipped self/invalid message');
+            return;
+        }
+
+        const text = getMessageText(message);
+        console.log(`Processing message: "${text}" from ${message.key.remoteJid}`);
+
+        if (!text.trim()) return;
+
+        const matchedResponses = audioResponses.filter(response => 
+            response.words.some(word => {
+                const pattern = /[\p{Emoji}]/u.test(word)
+                    ? escapeRegExp(word)
+                    : `\\b${escapeRegExp(word)}\\b`;
+
+                return new RegExp(pattern, 'iu').test(text);
+            })
+        );
+
+        if (matchedResponses.length === 0) return;
+
+        console.log(`Matched ${matchedResponses.length} responses in ${message.key.remoteJid}`);
+        
+        const uniqueResponses = [...new Map(
+            matchedResponses.map(item => [item.url, item])
+        ).values()];
+
+        // Process responses in parallel with rate limiting
+        await Promise.allSettled(
+            uniqueResponses.map(response => 
+                handleAudioResponse(client, message, response)
+        );
+        
+    } catch (error) {
+        console.error('Message processing error:', error);
+    }
+}
+
+const handleAudioResponse = async (client, message, audioResponse) => {
+    const downloadDir = path.join(__dirname, '../downloads', Date.now().toString());
     await fs.ensureDir(downloadDir);
     
-    const filename = `${Date.now()}_${response.words[0].replace(/[^\p{L}\p{N}]/giu, '_')}.mp3`;
+    const filename = `${audioResponse.words[0].replace(/[^\p{L}\p{N}]/giu, '_')}.mp3`;
     const audioFilePath = path.join(downloadDir, filename);
 
     try {
-        // Validate URL before download
-        console.log(`Downloading from: ${response.url}`);
-        const headResponse = await axios.head(response.url);
-        if (headResponse.status !== 200) {
-            throw new Error(`Invalid response status: ${headResponse.status}`);
-        }
-
-        // Download with timeout
-        const writer = fs.createWriteStream(audioFilePath);
-        const response = await axios({
-            url: response.url,
+        console.log(`Starting download for: ${audioResponse.words.join(', ')}`);
+        
+        // Validate URL
+        const { data: audioStream } = await axios({
+            url: audioResponse.url,
             method: 'GET',
             responseType: 'stream',
-            timeout: 10000
+            timeout: 15000,
+            validateStatus: status => status === 200
         });
 
-        response.data.pipe(writer);
-
+        const writer = fs.createWriteStream(audioFilePath);
+        audioStream.pipe(writer);
+        
         await new Promise((resolve, reject) => {
             writer.on('finish', resolve);
             writer.on('error', reject);
         });
 
-        // Send audio with optimized settings
+        console.log(`Sending audio for: ${audioResponse.words.join(', ')}`);
+        
         await client.sendMessage(message.key.remoteJid, { 
             audio: fs.readFileSync(audioFilePath),
             mimetype: 'audio/mpeg',
-            ptt: true,
-            waveform: Buffer.from([0x00, 0x00, 0x00, 0x00, 0x00]) // Improves compatibility
-        }, { quoted: message });
+            ptt: true
+        }, {
+            quoted: message,
+            upload: true,
+            mediaUploadTimeoutMs: 30000
+        });
 
-        console.log(`Successfully sent: ${response.words.join(', ')}`);
+        console.log(`Successfully sent: ${audioResponse.words.join(', ')}`);
     } catch (error) {
-        console.error(`Response error [${response.words.join(', ')}]:`, error.message);
+        if (error instanceof Boom && error.output.statusCode === 429) {
+            console.log('Rate limited - delaying next response');
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        } else {
+            console.error(`Response error [${audioResponse.words.join(', ')}]:`, error.message);
+        }
     } finally {
         try {
-            await fs.remove(audioFilePath);
+            await fs.remove(downloadDir);
         } catch (cleanupError) {
             console.error('Cleanup error:', cleanupError.message);
         }
