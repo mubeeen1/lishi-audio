@@ -1,20 +1,11 @@
 const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
-const { Boom } = require('@hapi/boom');
 
-const escapeRegExp = (string) => {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-=======
-// Improved regex patterns
-const createPattern = (word) => {
-    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return /[\p{Emoji}]/u.test(word) 
-        ? escaped 
-        : `(?<!\\w)${escaped}(?!\\w)`;
-};
-
+// Define audio responses with keywords and their corresponding URLs
 const audioResponses = [
+    { words: ["hello"], url: "https://example.com/audio/hello.mp3" },
+    { words: ["help"], url: "https://example.com/audio/help.mp3" },
     { words: ["dj"], url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/menu.m4a" },
     { words: ["mubeen", "coder"], url: "https://archive.org/download/grave_202502/coder.mp3" },
     { words: ["grave", "🪦"], url: "https://archive.org/download/grave_202502/grave.mp3" },
@@ -33,147 +24,53 @@ const audioResponses = [
     { words: ["khoya", "beinteha", "be-inteha", "be inteha"], url: "https://archive.org/download/grave_202502/khoya.mp3" },
 ];
 
-<<<<<<< HEAD
-const getMessageText = (message) => {
-    const messageTypes = [
-        'conversation',
-        'extendedTextMessage.text',
-        'imageMessage.caption',
-        'videoMessage.caption',
-        'buttonsResponseMessage.selectedButtonId',
-        'listResponseMessage.title'
-    ];
-    
-    return messageTypes.reduce((acc, type) => {
-        if (acc) return acc;
-        const parts = type.split('.');
-        return parts.reduce((obj, part) => obj?.[part], message.message);
-    }, '') || '';
-};
-
 const initialize = (client) => {
     client.ev.on('messages.upsert', async (msg) => {
-        try {
-            const processingQueue = [];
-            const now = Date.now();
-            
-            for (const message of msg.messages) {
-                // Skip messages older than 2 minutes
-                if (now - message.messageTimestamp * 1000 > 120000) continue;
+        const messages = msg.messages; // Get all messages
+        const now = Date.now();
 
-                processingQueue.push(processMessage(client, message));
-            }
+        for (const message of messages) {
+            // Skip messages older than 2 minutes and self-messages
+            if (now - message.messageTimestamp * 1000 > 120000 || message.key.fromMe) continue;
 
-            // Process messages in parallel with concurrency control
-            await Promise.allSettled(processingQueue);
-        } catch (error) {
-            console.error('Message processing failed:', error);
-=======
-const getMessageContent = (message) => {
-    return [
-        message?.message?.conversation,
-        message?.message?.extendedTextMessage?.text,
-        message?.message?.imageMessage?.caption,
-        message?.message?.videoMessage?.caption
-    ].find(content => typeof content === 'string') || '';
-};
+            const text = message.message.conversation || '';
+            const lowerCaseText = text.toLowerCase().trim(); // Convert to lowercase for case-insensitive matching
 
-const initialize = (client) => {
-    client.ev.on('messages.upsert', async ({ messages }) => {
-        try {
-            const processing = messages
-                .filter(msg => 
-                    !msg.key.fromMe && 
-                    Date.now() - (msg.messageTimestamp * 1000) < 120000
+            // Check for matching keywords
+            const matchedResponses = audioResponses.filter(response => 
+                response.words.some(word => 
+                    new RegExp(createPattern(word), 'iu').test(lowerCaseText)
                 )
-                .map(async (message) => {
-                    const text = getMessageContent(message).toLowerCase().trim();
-                    if (!text) return;
+            );
 
-                    const matches = audioResponses.filter(response => 
-                        response.words.some(word => 
-                            new RegExp(createPattern(word), 'iu').test(text)
-                        )
-                    );
-
-                    if (matches.length === 0) return;
-
-                    console.log(`📩 Matched ${matches.length} triggers in ${message.key.remoteJid}`);
-                    
-                    for (const response of [...new Map(matches.map(r => [r.url, r])).values()]) {
-                        try {
-                            await handleAudioResponse(client, message, response);
-                            await new Promise(resolve => setTimeout(resolve, 1500));
-                        } catch (err) {
-                            console.error(`Audio send failed: ${err.message}`);
-                        }
-                    }
-                });
-
-            await Promise.allSettled(processing);
-        } catch (error) {
-            console.error('Message processing error:', error);
->>>>>>> db31f93 (c)
+            // Handle all matched responses
+            for (const matchedResponse of matchedResponses) {
+                console.log(`Matched keyword: ${matchedResponse.words.join(', ')}`); // Log matched keywords
+                await handleAudioResponse(client, message, matchedResponse);
+            }
         }
     });
 };
 
-<<<<<<< HEAD
-async function processMessage(client, message) {
-    try {
-        if (message.key.fromMe || !message.message) {
-            console.log('Skipped self/invalid message');
-            return;
-        }
+const createPattern = (word) => {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return /[\p{Emoji}]/u.test(word) 
+        ? escaped 
+        : `(?<!\\w)${escaped}(?!\\w)`; // Word boundary for non-emoji
+};
 
-        const text = getMessageText(message);
-        console.log(`Processing message: "${text}" from ${message.key.remoteJid}`);
+const handleAudioResponse = async (client, message, response) => {
+    const downloadDir = path.join(__dirname, '../downloads');
+    await fs.ensureDir(downloadDir); // Ensure the downloads directory exists
 
-        if (!text.trim()) return;
-
-        const matchedResponses = audioResponses.filter(response => 
-            response.words.some(word => {
-                const pattern = /[\p{Emoji}]/u.test(word)
-                    ? escapeRegExp(word)
-                    : `\\b${escapeRegExp(word)}\\b`;
-
-                return new RegExp(pattern, 'iu').test(text);
-            })
-        );
-
-        if (matchedResponses.length === 0) return;
-
-        console.log(`Matched ${matchedResponses.length} responses in ${message.key.remoteJid}`);
-        
-        const uniqueResponses = [...new Map(
-            matchedResponses.map(item => [item.url, item])
-        ).values()];
-
-        // Fixed Promise.allSettled syntax
-        await Promise.allSettled(
-            uniqueResponses.map(response => 
-                handleAudioResponse(client, message, response)
-            )
-        );
-        
-    } catch (error) {
-        console.error('Message processing error:', error);
-    }
-}
-
-const handleAudioResponse = async (client, message, audioResponse) => {
-    const downloadDir = path.join(__dirname, '../downloads', Date.now().toString());
-    await fs.ensureDir(downloadDir);
-    
-    const filename = `${audioResponse.words[0].replace(/[^\p{L}\p{N}]/giu, '_')}.mp3`;
-    const audioFilePath = path.join(downloadDir, filename);
+    const audioFilePath = path.join(downloadDir, `${response.words[0].replace(/[^\p{L}\p{N}]/giu, '_')}.mp3`);
 
     try {
-        console.log(`Starting download for: ${audioResponse.words.join(', ')}`);
+        console.log(`Starting download for: ${response.words.join(', ')}`);
         
-        // Validate URL
+        // Download the audio file
         const { data: audioStream } = await axios({
-            url: audioResponse.url,
+            url: response.url,
             method: 'GET',
             responseType: 'stream',
             timeout: 15000,
@@ -182,77 +79,29 @@ const handleAudioResponse = async (client, message, audioResponse) => {
 
         const writer = fs.createWriteStream(audioFilePath);
         audioStream.pipe(writer);
-        
-=======
-const handleAudioResponse = async (client, message, response) => {
-    const tempDir = path.join(__dirname, '../temp', Date.now().toString());
-    await fs.ensureDir(tempDir);
-    
-    try {
-        const audioPath = path.join(tempDir, `${response.words[0]}.mp3`);
-        
-        // Download with timeout
-        const writer = fs.createWriteStream(audioPath);
-        const { data } = await axios({
-            url: response.url,
-            method: 'GET',
-            responseType: 'stream',
-            timeout: 20000
-        });
 
-        data.pipe(writer);
->>>>>>> db31f93 (c)
         await new Promise((resolve, reject) => {
             writer.on('finish', resolve);
             writer.on('error', reject);
         });
 
-<<<<<<< HEAD
-        console.log(`Sending audio for: ${audioResponse.words.join(', ')}`);
-        
-        await client.sendMessage(message.key.remoteJid, { 
-            audio: fs.readFileSync(audioFilePath),
-=======
+        console.log(`Successfully downloaded: ${response.words.join(', ')}`);
+
+        // Send the audio file as a voice note to the original sender
         await client.sendMessage(message.key.remoteJid, {
-            audio: { url: audioPath },
->>>>>>> db31f93 (c)
+            audio: { url: audioFilePath },
             mimetype: 'audio/mpeg',
             ptt: true
         }, {
-            quoted: message,
-            upload: true,
-<<<<<<< HEAD
-            mediaUploadTimeoutMs: 30000
+            quoted: message
         });
 
-        console.log(`Successfully sent: ${audioResponse.words.join(', ')}`);
+        console.log(`Successfully sent: ${response.words.join(', ')} to ${message.key.remoteJid}`);
     } catch (error) {
-        if (error instanceof Boom && error.output.statusCode === 429) {
-            console.log('Rate limited - delaying next response');
-            await new Promise(resolve => setTimeout(resolve, 5000));
-        } else {
-            console.error(`Response error [${audioResponse.words.join(', ')}]:`, error.message);
-        }
+        console.error(`Error handling audio response for keywords "${response.words.join(', ')}":`, error.message);
     } finally {
-        try {
-            await fs.remove(downloadDir);
-        } catch (cleanupError) {
-            console.error('Cleanup error:', cleanupError.message);
-=======
-            mediaUploadTimeoutMs: 45000
-        });
-
-        console.log(`✅ Sent ${response.words.join(', ')} to ${message.key.remoteJid}`);
-    } catch (error) {
-        if (error.output?.statusCode === 429) {
-            console.log('⏳ Rate limited - waiting 5 seconds');
-            await new Promise(resolve => setTimeout(resolve, 5000));
-        } else {
-            console.error(`❌ ${response.words.join(', ')} error:`, error.message);
->>>>>>> db31f93 (c)
-        }
-    } finally {
-        await fs.remove(tempDir).catch(() => {});
+        // Clean up the downloaded file
+        await fs.remove(audioFilePath).catch(err => console.error('Cleanup error:', err.message));
     }
 };
 
