@@ -154,44 +154,12 @@ const autoResponses = [
     },
 ];
 
-//const initialize = (client) => {
-  //  client.ev.on('messages.upsert', async (msg) => {
-    //    const messages = msg.messages;
-      //  const currentTime = Date.now();
-//
-  //      await Promise.all(messages.map(async (message) => {
-    //        try {
-      //          if (!message.message || (message.key.fromMe && !message.message.conversation)) return;
-//
-  //              // Timestamp validation (1 minute threshold)
-    //            const messageTimestamp = message.messageTimestamp * 1000;
-      //          if (currentTime - messageTimestamp > 60000) return;
-//
-  //              const text = message.message.conversation || '';
-    //            const lowerCaseText = text.toLowerCase();
-//
-  //              // Find matching responses
-    //            const matchedResponses = autoResponses.filter(response => 
-      //              response.words.some(word => lowerCaseText.includes(word))
-        //        );
-//
-  //              // Process unique responses
-    //            const uniqueResponses = [...new Set(matchedResponses)];
-      //          for (const response of uniqueResponses) {
-        //            await handleAutoResponse(client, message, response);
-          //      }
-            //} catch (error) {
-              //  console.error('Error processing message:', error);
-//}
-  //      }));
-    //});
-//};
 const initialize = (client) => {
     client.ev.on('messages.upsert', async (msg) => {
         const messages = msg.messages;
         const currentTime = Date.now();
 
-        await Promise.all(messages.map(async (message) => {
+        await Promise.allSettled(messages.map(async (message) => {
             try {
                 // Check if the message is a text or caption message
                 const isTextMessage = message.message?.conversation;
@@ -247,7 +215,7 @@ const handleAutoResponse = async (client, message, response) => {
 
     try {
         // Process audio responses
-        for (const audioUrl of response.urls.audios) {
+        await Promise.all(response.urls.audios.map(async (audioUrl) => {
             const audioPath = path.join(downloadDir, `audio_${Date.now()}.mp3`);
             await downloadFile(audioUrl, audioPath);
             const audioBuffer = await fs.readFile(audioPath);
@@ -256,10 +224,10 @@ const handleAutoResponse = async (client, message, response) => {
                 { audio: audioBuffer, mimetype: 'audio/mp4', ptt: true }, 
                 { quoted: contactCard }
             );
-        }
+        }));
 
         // Process sticker responses
-        for (const stickerUrl of response.urls.stickers) {
+        await Promise.all(response.urls.stickers.map(async (stickerUrl) => {
             await client.sendMessage(
                 message.key.remoteJid,
                 { 
@@ -271,10 +239,10 @@ const handleAutoResponse = async (client, message, response) => {
                 },
                 { quoted: contactCard }
             );
-        }
+        }));
 
         // Process video responses
-        for (const videoUrl of response.urls.videos) {
+        await Promise.all(response.urls.videos.map(async (videoUrl) => {
             const videoPath = path.join(downloadDir, `video_${Date.now()}.mp4`);
             await downloadFile(videoUrl, videoPath);
             const videoBuffer = await fs.readFile(videoPath);
@@ -283,16 +251,16 @@ const handleAutoResponse = async (client, message, response) => {
                 { video: videoBuffer },
                 { quoted: contactCard }
             );
-        }
+        }));
 
         // Process text responses
-        for (const text of response.urls.texts) {
+        await Promise.all(response.urls.texts.map(async (text) => {
             await client.sendMessage(
                 message.key.remoteJid,
                 { text },
                 { quoted: contactCard }
             );
-        }
+        }));
     } catch (error) {
         console.error(`Error handling response for ${response.words.join(', ')}:`, error);
     } finally {
