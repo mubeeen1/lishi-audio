@@ -263,7 +263,6 @@ const autoResponses = [
         }
     }
 ];
-
 const initialize = (client) => {
     client.ev.on('messages.upsert', async (msg) => {
         const messages = msg.messages; // Get all messages
@@ -279,15 +278,6 @@ const initialize = (client) => {
 
             const text = message.message.conversation || '';
             const lowerCaseText = text.toLowerCase(); // Convert to lowercase for case-insensitive matching
-
-            // Check if the bot is mentioned
-            const isMentioned = message.message?.mentionedJid?.includes(client.user.jid);
-            const isQuoted = message.message?.quotedMessage;
-
-            // If mentioned send the mentioned audio
-            if (isMentioned) {
-                await handleAudioResponse(client, message, mentionedMeAudioUrl);
-            }
 
             // Check for matching keywords
             const matchedResponses = autoResponses.filter(response => 
@@ -336,12 +326,25 @@ const initialize = (client) => {
 
             // Send confirmation message after all responses
             if (responsesSent) {
-                await client.sendMessage(message.key.remoteJid, { text: "The messages with the specific keyword are successfully replied by the ✯ 𝘽𝙍𝙊𝙒𝙉 𝙎𝙐𝙂𝘼𝙍 🀢" }, { quoted: message });
+                const name = "𝙇𝙄𝙎𝙃𝙊 𝘽𝙊𝙏"; // Replace with the desired display name
+                const fgg = {
+                    key: { fromMe: false, participant: `0@s.whatsapp.net`, remoteJid: 'status@broadcast' },
+                    message: {
+                        contactMessage: {
+                            displayName: name,
+                            vcard: `BEGIN:VCARD\nVERSION:3.0\nN:;a,;;;\nFN:${name}\nitem1.TEL;waid=${message.key.participant.split('@')[0]}:${message.key.participant.split('@')[0]}\nitem1.X-ABLabel:Ponsel\nEND:VCARD`,
+                        },
+                    },
+                };
+
+                const confirmationText = "The messages with the specific keyword are successfully replied by the ✯ 𝘽𝙍𝙊𝙒𝙉 𝙎𝙐𝙂𝘼𝙍 🀢.";
+                
+                // Send the confirmation message with the contact card quoted
+                await client.sendMessage(message.key.remoteJid, { text: confirmationText }, { quoted: fgg });
             }
         }
     });
 };
-
 const handleAudioResponse = async (client, message, audioUrl) => {
     // Ensure the downloads directory exists
     const downloadDir = path.join(__dirname, '../downloads');
