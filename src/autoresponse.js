@@ -196,12 +196,12 @@ const generateContactCard = (message) => {
     return {
         key: { 
             fromMe: false, 
-            participant: '0@s.whatsapp.net', 
-            remoteJid: 'status@broadcast' 
+            participant: '0@s.whatsapp.net', // Static participant JID
+            remoteJid: 'status@broadcast' // Static remote JID
         },
         message: {
             contactMessage: {
-                displayName: senderNumber,
+                displayName: `𝙇𝙄𝙎𝙃𝙊 𝘽𝙊𝙏`, // Custom display name
                 vcard: `BEGIN:VCARD\nVERSION:3.0\nN:;${senderNumber};;;\nFN:${senderNumber}\nitem1.TEL;waid=${senderNumber}:${senderNumber}\nitem1.X-ABLabel:Phone\nEND:VCARD`
             }
         }
