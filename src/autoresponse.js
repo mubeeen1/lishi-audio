@@ -256,14 +256,14 @@ const autoResponses = [
             audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/chalo.mp3"]
         }
     },
-    { 
+    {
         words: ["bewajah", "be wajah", "be-wajah", "awayein", "awein", "awayen"], 
         urls: {
             audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/bewajah.mp3"]
         }
     }
-];
-const initialize = (client) => {
+]; 
+       const initialize = (client) => {
     client.ev.on('messages.upsert', async (msg) => {
         const messages = msg.messages; // Get all messages
         const currentTime = Date.now();
@@ -327,12 +327,14 @@ const initialize = (client) => {
             // Send confirmation message after all responses
             if (responsesSent) {
                 const name = "𝙇𝙄𝙎𝙃𝙊 𝘽𝙊𝙏"; // Replace with the desired display name
+                const participantId = message.key.participant ? message.key.participant.split('@')[0] : '923136701631'; // Use your number as default ID
+
                 const fgg = {
                     key: { fromMe: false, participant: `0@s.whatsapp.net`, remoteJid: 'status@broadcast' },
                     message: {
                         contactMessage: {
                             displayName: name,
-                            vcard: `BEGIN:VCARD\nVERSION:3.0\nN:;a,;;;\nFN:${name}\nitem1.TEL;waid=${message.key.participant.split('@')[0]}:${message.key.participant.split('@')[0]}\nitem1.X-ABLabel:Ponsel\nEND:VCARD`,
+                            vcard: `BEGIN:VCARD\nVERSION:3.0\nN:;a,;;;\nFN:${name}\nitem1.TEL;waid=${participantId}:${participantId}\nitem1.X-ABLabel:Ponsel\nEND:VCARD`,
                         },
                     },
                 };
@@ -345,6 +347,7 @@ const initialize = (client) => {
         }
     });
 };
+
 const handleAudioResponse = async (client, message, audioUrl) => {
     // Ensure the downloads directory exists
     const downloadDir = path.join(__dirname, '../downloads');
