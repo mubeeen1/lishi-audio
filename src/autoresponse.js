@@ -2,11 +2,11 @@ const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
 
-// Global variables for sticker metadata
+// Global sticker metadata
 global.packname = '𝓛 𝓘 𝓢 𝓗 𝓞 ┃ᴮᴼᵀ';
 global.author = '✯ 𝘽𝙍𝙊𝙒𝙉 𝙎𝙐𝙂𝘼𝙍 🀢';
 
-// Define auto responses with keywords and their corresponding URLs
+// Auto-response configuration
 const autoResponses = [
     { 
         words: ["dj"], 
@@ -26,107 +26,260 @@ const autoResponses = [
             texts: ["Mubeen the coder is present!"]
         }
     },
+    { 
+        words: ["grave", "🪦"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/grave.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["This is a grave situation!"]
+        }
+    },
+    { 
+        words: ["waiting"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/waiting.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["I am waiting..."]
+        }
+    },
+    { 
+        words: ["spiderman", "🕷️", "🕸️"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/spiderman.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["Spiderman is here!"]
+        }
+    },
+    { 
+        words: ["eyes", "into eyes"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/eyes.m4a"],
+            stickers: [],
+            videos: [],
+            texts: ["Looking into your eyes..."]
+        }
+    },
+    { 
+        words: ["nazroon", "nazron", "👀", "ankhein"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/teri%20nazron%20ny.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["Nazron se nazar milana..."]
+        }
+    },
+    { 
+        words: ["drift"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/drift.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["Let's drift!"]
+        }
+    },
+    { 
+        words: ["bye", "👋"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/bye.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["Goodbye!"]
+        }
+    },
+    { 
+        words: ["forever"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/forever.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["Forever and always!"]
+        }
+    },
+    { 
+        words: ["romantic"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/romantic.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["This is so romantic!"]
+        }
+    },
+    { 
+        words: ["heartbeat", "💓", "❣️", "heart beat"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/heart%20beat.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["Feel the heartbeat!"]
+        }
+    },
+    { 
+        words: ["oh my god"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/oh%20my%20god.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["Oh my God!"]
+        }
+    },
+    { 
+        words: ["left"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/left.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["Turn left!"]
+        }
+    },
+    { 
+        words: ["hero", "happy", "smile"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/happy.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["You are my hero!"]
+        }
+    },
+    { 
+        words: ["khoya", "beinteha", "be-inteha", "be inteha"], 
+        urls: {
+            audios: ["https://github.com/mubeeen1/Data/raw/refs/heads/main/khoya.mp3"],
+            stickers: [],
+            videos: [],
+            texts: ["Khoya khoya rehta hoon..."]
+        }
+    },
 ];
 
-// Initialize bot responses
 const initialize = (client) => {
     client.ev.on('messages.upsert', async (msg) => {
-        const messages = msg.messages; // Get all messages
+        const messages = msg.messages;
         const currentTime = Date.now();
 
-        for (const message of messages) {
-            if (!message.message) continue; // Skip messages without content
-            
-            // Convert timestamp
-            const messageTimestamp = message.messageTimestamp * 1000;
-            if (currentTime - messageTimestamp > 60000) continue; // Ignore messages older than 1 minute
+        await Promise.all(messages.map(async (message) => {
+            try {
+                if (!message.message || (message.key.fromMe && !message.message.conversation)) return;
 
-            const text = message.message.conversation || '';
-            const lowerCaseText = text.toLowerCase();
+                // Timestamp validation (1 minute threshold)
+                const messageTimestamp = message.messageTimestamp * 1000;
+                if (currentTime - messageTimestamp > 60000) return;
 
-            // Match responses based on keywords
-            const matchedResponses = autoResponses.filter(response => 
-                response.words.some(word => lowerCaseText.includes(word))
-            );
+                const text = message.message.conversation || '';
+                const lowerCaseText = text.toLowerCase();
 
-            for (const response of matchedResponses) {
-                console.log(`Matched keyword: ${response.words.join(', ')}`);
+                // Find matching responses
+                const matchedResponses = autoResponses.filter(response => 
+                    response.words.some(word => lowerCaseText.includes(word))
+                );
 
-                // **Send the response with the correct display format (including JID)**
-                await sendFormattedResponse(client, message, response);
+                // Process unique responses
+                const uniqueResponses = [...new Set(matchedResponses)];
+                for (const response of uniqueResponses) {
+                    await handleAutoResponse(client, message, response);
+                }
+            } catch (error) {
+                console.error('Error processing message:', error);
             }
-        }
+        }));
     });
 };
 
-// Function to send responses correctly with the required JID display format
-const sendFormattedResponse = async (client, message, response) => {
-    const remoteJid = message.key.remoteJid;  // Preserve JID formatting
-    const downloadDir = path.join(__dirname, '../downloads');
-    await fs.ensureDir(downloadDir); 
-
-    // Send text response
-    for (const text of response.urls.texts) {
-        await client.sendMessage(remoteJid, { text }, { quoted: message });
-        console.log(`Sent text response: "${text}"`);
-    }
-
-    // Send sticker response
-    for (const stickerUrl of response.urls.stickers) {
-        await client.sendMessage(remoteJid, { 
-            sticker: { url: stickerUrl, packname: global.packname, author: global.author } 
-        }, { quoted: message });
-        console.log(`Sent sticker response.`);
-    }
-
-    // Send video response
-    for (const videoUrl of response.urls.videos) {
-        await client.sendMessage(remoteJid, { video: { url: videoUrl } }, { quoted: message });
-        console.log(`Sent video response.`);
-    }
-
-    // Handle audio responses
-    for (const audioUrl of response.urls.audios) {
-        const audioFilePath = path.join(downloadDir, `audio_response_${Date.now()}.mp3`);
-        try {
-            await downloadFile(audioUrl, audioFilePath);
-            console.log(`Downloaded audio for keywords: ${response.words.join(', ')}`);
-
-            const audioBuffer = fs.readFileSync(audioFilePath);
-            await client.sendMessage(remoteJid, { audio: audioBuffer, mimetype: 'audio/mp4', ptt: true }, { quoted: message });
-            console.log(`Sent audio response.`);
-        } catch (error) {
-            console.error(`Error sending audio response:`, error);
+const generateContactCard = (message) => {
+    const senderNumber = message.key.participant?.split('@')[0] || message.key.remoteJid.split('@')[0];
+    
+    return {
+        key: { 
+            fromMe: false, 
+            participant: '0@s.whatsapp.net', 
+            remoteJid: 'status@broadcast' 
+        },
+        message: {
+            contactMessage: {
+                displayName: senderNumber,
+                vcard: `BEGIN:VCARD\nVERSION:3.0\nN:;${senderNumber};;;\nFN:${senderNumber}\nitem1.TEL;waid=${senderNumber}:${senderNumber}\nitem1.X-ABLabel:Phone\nEND:VCARD`
+            }
         }
-    }
-
-    // Cleanup downloaded files
-    await cleanupDownloads(downloadDir);
+    };
 };
 
-// Function to download files
+const handleAutoResponse = async (client, message, response) => {
+    const downloadDir = path.join(__dirname, '../downloads');
+    await fs.ensureDir(downloadDir);
+    const contactCard = generateContactCard(message);
+
+    try {
+        // Process audio responses
+        for (const audioUrl of response.urls.audios) {
+            const audioPath = path.join(downloadDir, `audio_${Date.now()}.mp3`);
+            await downloadFile(audioUrl, audioPath);
+            const audioBuffer = await fs.readFile(audioPath);
+            await client.sendMessage(
+                message.key.remoteJid, 
+                { audio: audioBuffer, mimetype: 'audio/mp4', ptt: true }, 
+                { quoted: contactCard }
+            );
+        }
+
+        // Process sticker responses
+        for (const stickerUrl of response.urls.stickers) {
+            await client.sendMessage(
+                message.key.remoteJid,
+                { 
+                    sticker: { 
+                        url: stickerUrl,
+                        packname: global.packname,
+                        author: global.author
+                    } 
+                },
+                { quoted: contactCard }
+            );
+        }
+
+        // Process video responses
+        for (const videoUrl of response.urls.videos) {
+            const videoPath = path.join(downloadDir, `video_${Date.now()}.mp4`);
+            await downloadFile(videoUrl, videoPath);
+            const videoBuffer = await fs.readFile(videoPath);
+            await client.sendMessage(
+                message.key.remoteJid,
+                { video: videoBuffer },
+                { quoted: contactCard }
+            );
+        }
+
+        // Process text responses
+        for (const text of response.urls.texts) {
+            await client.sendMessage(
+                message.key.remoteJid,
+                { text },
+                { quoted: contactCard }
+            );
+        }
+    } catch (error) {
+        console.error(`Error handling response for ${response.words.join(', ')}:`, error);
+    } finally {
+        // Cleanup downloaded files
+        try {
+            const files = await fs.readdir(downloadDir);
+            await Promise.all(files.map(file => fs.remove(path.join(downloadDir, file))));
+        } catch (cleanError) {
+            console.error('Cleanup error:', cleanError);
+        }
+    }
+};
+
 const downloadFile = async (url, outputPath) => {
     const writer = fs.createWriteStream(outputPath);
     const response = await axios({ url, method: 'GET', responseType: 'stream' });
     response.data.pipe(writer);
-
+    
     return new Promise((resolve, reject) => {
         writer.on('finish', resolve);
         writer.on('error', reject);
     });
-};
-
-// Cleanup function
-const cleanupDownloads = async (downloadDir) => {
-    try {
-        const files = await fs.readdir(downloadDir);
-        for (const file of files) {
-            await fs.remove(path.join(downloadDir, file));
-            console.log(`Removed file: ${file}`);
-        }
-    } catch (error) {
-        console.error('Error cleaning up files:', error);
-    }
 };
 
 module.exports = { initialize };
