@@ -3,8 +3,7 @@ const fs = require('fs-extra');
 const path = require('path');
 
 // Variable for the audio URL to send when mentioned
-const mentionedMeAudioUrl = "https://example.com/path/to/your/audio/file.mp3"; // Replace with your actual audio URL
-
+const mentionedMeAudioUrl = "https://github.com/mubeeen1/Data/raw/refs/heads/main/mention.mp3"; 
 // Updated autoResponses structure
 const autoResponses = [
     { 
