@@ -65,7 +65,7 @@ const handleAudioResponse = async (client, message, response) => {
     const downloadDir = path.join(__dirname, '../downloads');
     await fs.ensureDir(downloadDir); // Create the downloads directory if it doesn't exist
 
-    // Use a generic name for the downloaded file
+    // Use a unique name for the downloaded file
     const audioFilePath = path.join(downloadDir, `audio_response_${Date.now()}.mp3`);
 
     try {
