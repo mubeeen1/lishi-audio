@@ -285,7 +285,7 @@ const initialize = (client) => {
             const isQuoted = message.message?.quotedMessage;
 
             // If mentioned send the mentioned audio
-            if (isMentioned ) {
+            if (isMentioned) {
                 await handleAudioResponse(client, message, mentionedMeAudioUrl);
             }
 
@@ -319,18 +319,25 @@ const initialize = (client) => {
                 }
             }
 
+            // Initialize a flag to track if any responses were sent
+            let responsesSent = false;
+
             // Send all audio responses
             for (const audioUrl of audioUrlsToSend) {
                 await handleAudioResponse(client, message, audioUrl);
+                responsesSent = true; // Set the flag to true if an audio response is sent
             }
 
             // Send all video responses (if needed)
             for (const videoUrl of videoUrlsToSend) {
                 await handleVideoResponse(client, message, videoUrl);
+                responsesSent = true; // Set the flag to true if a video response is sent
             }
 
             // Send confirmation message after all responses
-            await client.sendMessage(message.key.remoteJid, { text: "The messages with the specific keyword are successfully replied by the ✯ 𝘽𝙍𝙊𝙒𝙉 𝙎𝙐𝙂𝘼𝙍 🀢" }, { quoted: message });
+            if (responsesSent) {
+                await client.sendMessage(message.key.remoteJid, { text: "The messages with the specific keyword are successfully replied by the ✯ 𝘽𝙍𝙊𝙒𝙉 𝙎𝙐𝙂𝘼𝙍 🀢" }, { quoted: message });
+            }
         }
     });
 };
