@@ -4,14 +4,12 @@ const path = require('path');
 
 // Define audio responses with keywords and their corresponding URLs
 const audioResponses = [
-    { words: ["hello"], url: "https://example.com/audio/hello.mp3" },
-    { words: ["help"], url: "https://example.com/audio/help.mp3" },
-    { words: ["dj"], url: "https://github.com/Silva-World/SPARK-DATA/raw/refs/heads/main/autovoice/menu.m4a" },
-    { words: ["mubeen", "coder"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/coder.mp3" },
+    { words: ["dj"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/autovoice/menu.m4a" },
+    { words: ["mubeen", "coder"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/coder.m4a" },
     { words: ["grave", "🪦"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/grave.mp3" },
     { words: ["waiting"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/waiting.mp3" },
     { words: ["spiderman", "🕷️", "🕸️"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/spiderman.mp3" },
-    { words: ["eyes", "into eyes"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/eyes.mp3" },
+    { words: ["eyes", "into eyes"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/eyes.m4a" },
     { words: ["nazroon", "nazron", "👀", "ankhein"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/teri%20nazron%20ny.mp3" },
     { words: ["drift"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/drift.mp3" },
     { words: ["bye", "👋"], url: "https://github.com/mubeeen1/Data/raw/refs/heads/main/bye.mp3" },
@@ -26,99 +24,80 @@ const audioResponses = [
 
 const initialize = (client) => {
     client.ev.on('messages.upsert', async (msg) => {
-        const messages = msg.messages || []; // Get all messages
-        const now = Date.now();
+        const messages = msg.messages; // Get all messages
+        const currentTime = Date.now();
 
-        // Process only new messages
         for (const message of messages) {
-            // Skip messages older than 1 minute and self-messages
-            if (now - message.messageTimestamp * 1000 > 60000 || message.key.fromMe) continue;
+            // Allow the bot to respond to its own messages
+            if (!message.message || (message.key.fromMe && !message.message.conversation)) continue;
+
+            // Check if the message is older than 1 minute
+            const messageTimestamp = message.messageTimestamp * 1000; // Convert to milliseconds
+            if (currentTime - messageTimestamp > 60000) continue; // Ignore messages older than 1 minute
 
             const text = message.message.conversation || '';
-            const lowerCaseText = text.toLowerCase().trim(); // Convert to lowercase for case-insensitive matching
+            const lowerCaseText = text.toLowerCase(); // Convert to lowercase for case-insensitive matching
 
             // Check for matching keywords
             const matchedResponses = audioResponses.filter(response => 
-                response.words.some(word => 
-                    new RegExp(createPattern(word), 'iu').test(lowerCaseText)
-                )
+                response.words.some(word => lowerCaseText.includes(word))
             );
 
-            // Handle all matched responses
+            // Handle matched responses
+            const uniqueResponses = new Set();
             for (const matchedResponse of matchedResponses) {
-                console.log(`Matched keyword: ${matchedResponse.words.join(', ')}`); // Log matched keywords
-                await handleAudioResponse(client, message, matchedResponse);
+                const uniqueWords = matchedResponse.words.filter(word => lowerCaseText.includes(word));
+                if (uniqueWords.length > 0) {
+                    uniqueResponses.add(matchedResponse);
+                }
+            }
+
+            for (const response of uniqueResponses) {
+                console.log(`Matched keyword: ${response.words.join(', ')}`); // Log matched keywords
+                await handleAudioResponse(client, message, response);
             }
         }
     });
 };
 
-const createPattern = (word) => {
-    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return /[\p{Emoji}]/u.test(word) 
-        ? escaped 
-        : `(?<!\\w)${escaped}(?!\\w)`; // Word boundary for non-emoji
-};
-
 const handleAudioResponse = async (client, message, response) => {
+    // Ensure the downloads directory exists
     const downloadDir = path.join(__dirname, '../downloads');
-    await fs.ensureDir(downloadDir); // Ensure the downloads directory exists
+    await fs.ensureDir(downloadDir); // Create the downloads directory if it doesn't exist
 
-    const audioFilePath = path.join(downloadDir, `${response.words[0].replace(/[^\p{L}\p{N}]/giu, '_')}.mp3`);
+    // Use a generic name for the downloaded file
+    const audioFilePath = path.join(downloadDir, `audio_response_${Date.now()}.mp3`);
 
     try {
-        console.log(`Starting download for: ${response.words.join(', ')}`);
-        
-        // Download the audio file with retry logic
-        await downloadFileWithRetry(response.url, audioFilePath);
-
-        console.log(`Successfully downloaded: ${response.words.join(', ')}`);
+        // Download the audio file
+        await downloadFile(response.url, audioFilePath);
+        console.log(`Downloaded audio for keywords: ${response.words.join(', ')}`);
 
         // Send the audio file as a voice note to the original sender
-        await client.sendMessage(message.key.remoteJid, {
-            audio: { url: audioFilePath },
-            mimetype: 'audio/mpeg',
-            ptt: true
-        }, {
-            quoted: message
-        });
-
-        console.log(`Successfully sent: ${response.words.join(', ')} to ${message.key.remoteJid}`);
+        const audioBuffer = fs.readFileSync(audioFilePath);
+        
+        await client.sendMessage(message.key.remoteJid, { audio: audioBuffer, mimetype: 'audio/mp4', ptt: true }, { quoted: message });
+        console.log(`Sent audio response for keywords: ${response.words.join(', ')}`);
     } catch (error) {
-        console.error(`Error handling audio response for keywords "${response.words.join(', ')}":`, error.message);
-    } finally {
-        // Clean up the downloaded file
-        await fs.remove(audioFilePath).catch(err => console.error('Cleanup error:', err.message));
+        console.error(`Error handling audio response for keywords "${response.words.join(', ')}":`, error);
     }
 };
 
-const downloadFileWithRetry = async (url, filePath, retries = 3) => {
-    for (let attempt = 0; attempt < retries; attempt++) {
-        try {
-            const { data: audioStream } = await axios({
-                url: url,
-                method: 'GET',
-                responseType: 'stream',
-                timeout: 15000,
-                validateStatus: status => status === 200
-            });
+const downloadFile = async (url, outputPath) => {
+    const writer = fs.createWriteStream(outputPath);
 
-            const writer = fs.createWriteStream(filePath);
-            audioStream.pipe(writer);
+    const response = await axios({
+        url,
+        method: 'GET',
+        responseType: 'stream',
+    });
 
-            await new Promise((resolve, reject) => {
-                writer.on('finish', resolve);
-                writer.on('error', reject);
-            });
+    response.data.pipe(writer);
 
-            return; // Exit if successful
-        } catch (error) {
-            console.error(`Download attempt ${attempt + 1} failed: ${error.message}`);
-            if (attempt === retries - 1) {
-                throw new Error(`Failed to download file after ${retries} attempts: ${url}`);
-            }
-        }
-    }
+    return new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+    });
 };
 
 module.exports = { initialize };
