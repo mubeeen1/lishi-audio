@@ -1,13 +1,13 @@
 const { initializeClient } = require('./src/auth');
-const autoaudio = require('./src/autoaudio');
+const autoresponse = require('./src/autoresponse');
 
 (async () => {
-    try {
+    try {7
         const client = await initializeClient();
         
         client.ev.on('connection.update', (update) => {
             if (update.connection === 'open') {
-                autoaudio.initialize(client);
+                autoresponse.initialize(client);
                 console.log('🎉 Auto-response system activated');
             }
         });
