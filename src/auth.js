@@ -17,7 +17,8 @@ const initializeClient = async () => {
     const client = makeWASocket({
         auth: state,
         printQRInTerminal: false, // Disable built-in QR printing
-        connectTimeoutMs: 30000, // Increase timeout to 30 seconds
+        connectTimeoutMs: 60000, // Increase timeout to 60 seconds
+	browser: ['MacOS Safari', '2025', 'Sonoma'],
     });
 
     client.ev.on('connection.update', async (update) => {
